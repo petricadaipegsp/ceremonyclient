@@ -15,7 +15,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/libp2p/go-libp2p"
@@ -26,14 +25,12 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	"github.com/libp2p/go-libp2p/p2p/discovery/util"
 	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	"github.com/libp2p/go-libp2p/p2p/net/swarm"
-	"github.com/libp2p/go-libp2p/p2p/protocol/identify"
 	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
 	"github.com/mr-tron/base58"
 	ma "github.com/multiformats/go-multiaddr"
@@ -47,21 +44,29 @@ import (
 	blossomsub "source.quilibrium.com/quilibrium/monorepo/go-libp2p-blossomsub"
 	"source.quilibrium.com/quilibrium/monorepo/go-libp2p-blossomsub/pb"
 	"source.quilibrium.com/quilibrium/monorepo/node/config"
+	"source.quilibrium.com/quilibrium/monorepo/node/p2p/internal"
 	"source.quilibrium.com/quilibrium/monorepo/node/protobufs"
 )
 
+const (
+	minPeersPerBitmask   = 4
+	minBootstrapPeers    = 3
+	discoveryParallelism = 10
+	discoveryPeerLimit   = 1000
+	bootstrapParallelism = 10
+)
+
 type BlossomSub struct {
-	ps              *blossomsub.PubSub
-	ctx             context.Context
-	logger          *zap.Logger
-	peerID          peer.ID
-	bitmaskMap      map[string]*blossomsub.Bitmask
-	h               host.Host
-	signKey         crypto.PrivKey
-	peerScore       map[string]int64
-	peerScoreMx     sync.Mutex
-	isBootstrapPeer bool
-	network         uint8
+	ps          *blossomsub.PubSub
+	ctx         context.Context
+	logger      *zap.Logger
+	peerID      peer.ID
+	bitmaskMap  map[string]*blossomsub.Bitmask
+	h           host.Host
+	signKey     crypto.PrivKey
+	peerScore   map[string]int64
+	peerScoreMx sync.Mutex
+	network     uint8
 }
 
 var _ PubSub = (*BlossomSub)(nil)
@@ -131,13 +136,12 @@ func NewBlossomSubStreamer(
 	}
 
 	bs := &BlossomSub{
-		ctx:             ctx,
-		logger:          logger,
-		bitmaskMap:      make(map[string]*blossomsub.Bitmask),
-		signKey:         privKey,
-		peerScore:       make(map[string]int64),
-		isBootstrapPeer: false,
-		network:         p2pConfig.Network,
+		ctx:        ctx,
+		logger:     logger,
+		bitmaskMap: make(map[string]*blossomsub.Bitmask),
+		signKey:    privKey,
+		peerScore:  make(map[string]int64),
+		network:    p2pConfig.Network,
 	}
 
 	h, err := libp2p.New(opts...)
@@ -282,19 +286,19 @@ func NewBlossomSub(
 	}
 
 	bs := &BlossomSub{
-		ctx:             ctx,
-		logger:          logger,
-		bitmaskMap:      make(map[string]*blossomsub.Bitmask),
-		signKey:         privKey,
-		peerScore:       make(map[string]int64),
-		isBootstrapPeer: isBootstrapPeer,
-		network:         p2pConfig.Network,
+		ctx:        ctx,
+		logger:     logger,
+		bitmaskMap: make(map[string]*blossomsub.Bitmask),
+		signKey:    privKey,
+		peerScore:  make(map[string]int64),
+		network:    p2pConfig.Network,
 	}
 
 	h, err := libp2p.New(opts...)
 	if err != nil {
 		panic(errors.Wrap(err, "error constructing p2p"))
 	}
+	idService := internal.IDServiceFromHost(h)
 
 	logger.Info("established peer id", zap.String("peer_id", h.ID().String()))
 
@@ -305,12 +309,51 @@ func NewBlossomSub(
 		isBootstrapPeer,
 		bootstrappers,
 	)
+
 	routingDiscovery := routing.NewRoutingDiscovery(kademliaDHT)
 	util.Advertise(ctx, routingDiscovery, getNetworkNamespace(p2pConfig.Network))
 
 	verifyReachability(p2pConfig)
 
-	discoverPeers(p2pConfig, ctx, logger, h, routingDiscovery, true, 8)
+	bootstrap := internal.NewPeerConnector(
+		ctx,
+		logger.Named("bootstrap"),
+		h,
+		idService,
+		minBootstrapPeers,
+		bootstrapParallelism,
+		internal.NewStaticPeerSource(bootstrappers, true),
+	)
+	if err := bootstrap.Connect(ctx); err != nil {
+		panic(err)
+	}
+	bootstrap = internal.NewConditionalPeerConnector(
+		ctx,
+		internal.NewNotEnoughPeersCondition(
+			h,
+			minBootstrapPeers,
+			internal.PeerAddrInfosToPeerIDMap(bootstrappers),
+		),
+		bootstrap,
+	)
+
+	discovery := internal.NewPeerConnector(
+		ctx,
+		logger.Named("discovery"),
+		h,
+		idService,
+		minPeersPerBitmask,
+		discoveryParallelism,
+		internal.NewRoutingDiscoveryPeerSource(
+			routingDiscovery,
+			getNetworkNamespace(p2pConfig.Network),
+			discoveryPeerLimit,
+		),
+	)
+	if err := discovery.Connect(ctx); err != nil {
+		panic(err)
+	}
+	discovery = internal.NewChainedPeerConnector(ctx, bootstrap, discovery)
 
 	go monitorPeers(ctx, logger, h)
 
@@ -384,7 +427,6 @@ func NewBlossomSub(
 		allowedPeerIDs[peerInfo.ID] = struct{}{}
 	}
 	go func() {
-		const minPeersPerBitmask = 4
 		for {
 			time.Sleep(30 * time.Second)
 			for _, b := range bs.bitmaskMap {
@@ -396,7 +438,7 @@ func NewBlossomSub(
 					}
 				}
 				if peerCount < minPeersPerBitmask {
-					discoverPeers(p2pConfig, bs.ctx, logger, bs.h, routingDiscovery, false, minPeersPerBitmask)
+					_ = discovery.Connect(ctx)
 					break
 				}
 			}
@@ -666,92 +708,24 @@ func initDHT(
 	bootstrappers []peer.AddrInfo,
 ) *dht.IpfsDHT {
 	logger.Info("establishing dht")
-	var kademliaDHT *dht.IpfsDHT
-	var err error
+	var mode dht.ModeOpt
 	if isBootstrapPeer {
-		kademliaDHT, err = dht.New(
-			ctx,
-			h,
-			dht.Mode(dht.ModeServer),
-			dht.BootstrapPeers(bootstrappers...),
-		)
+		mode = dht.ModeServer
 	} else {
-		kademliaDHT, err = dht.New(
-			ctx,
-			h,
-			dht.Mode(dht.ModeClient),
-			dht.BootstrapPeers(bootstrappers...),
-		)
+		mode = dht.ModeClient
 	}
+	kademliaDHT, err := dht.New(
+		ctx,
+		h,
+		dht.Mode(mode),
+		dht.BootstrapPeers(bootstrappers...),
+	)
 	if err != nil {
 		panic(err)
 	}
-	if err = kademliaDHT.Bootstrap(ctx); err != nil {
+	if err := kademliaDHT.Bootstrap(ctx); err != nil {
 		panic(err)
 	}
-
-	idService := h.(interface{ IDService() identify.IDService }).IDService()
-	reconnect := func() {
-		wg := &sync.WaitGroup{}
-		defer wg.Wait()
-		for _, p := range bootstrappers {
-			p := p
-			logger := logger.With(zap.String("peer_id", p.ID.String()))
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				if p.ID == h.ID() ||
-					h.Network().Connectedness(p.ID) == network.Connected ||
-					h.Network().Connectedness(p.ID) == network.Limited {
-					logger.Debug("peer already connected")
-					return
-				}
-
-				h.Peerstore().AddAddrs(p.ID, p.Addrs, peerstore.AddressTTL)
-				conn, err := h.Network().DialPeer(ctx, p.ID)
-				if err != nil {
-					logger.Debug("error while connecting to dht peer", zap.Error(err))
-					return
-				}
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(identify.Timeout / 2):
-					logger.Debug("identifying peer timed out")
-					_ = conn.Close()
-				case <-idService.IdentifyWait(conn):
-					h.ConnManager().Protect(p.ID, "bootstrap")
-					logger.Debug("connected to peer")
-				}
-			}()
-		}
-	}
-
-	reconnect()
-
-	bootstrapPeerIDs := make(map[peer.ID]struct{}, len(bootstrappers))
-	for _, peerinfo := range bootstrappers {
-		bootstrapPeerIDs[peerinfo.ID] = struct{}{}
-	}
-	go func() {
-		const minBootstrapPeers = 3
-		for {
-			time.Sleep(30 * time.Second)
-			count := 0
-			for _, p := range h.Network().Peers() {
-				if _, ok := bootstrapPeerIDs[p]; ok {
-					count++
-				}
-			}
-			if count < minBootstrapPeers {
-				logger.Debug("reconnecting to bootstrap peers", zap.Int("count", count))
-				reconnect()
-			} else {
-				logger.Debug("sufficient bootstrap peers", zap.Int("count", count))
-			}
-		}
-	}()
-
 	return kademliaDHT
 }
 
@@ -1019,101 +993,6 @@ func verifyReachability(cfg *config.P2PConfig) bool {
 
 	fmt.Println("Node passed reachability check.")
 	return true
-}
-
-func discoverPeers(
-	p2pConfig *config.P2PConfig,
-	ctx context.Context,
-	logger *zap.Logger,
-	h host.Host,
-	routingDiscovery *routing.RoutingDiscovery,
-	init bool,
-	maxPeers int,
-) {
-	idService := h.(interface{ IDService() identify.IDService }).IDService()
-
-	discover := func() {
-		logger.Info("initiating peer discovery")
-		var success, failure, duplicate uint32
-		defer func() {
-			logger.Info(
-				"completed peer discovery",
-				zap.Uint32("success", success),
-				zap.Uint32("failure", failure),
-				zap.Uint32("duplicate", duplicate),
-			)
-		}()
-
-		ctx, cancel := context.WithCancel(ctx)
-		defer cancel()
-
-		peerChan, err := routingDiscovery.FindPeers(
-			ctx,
-			getNetworkNamespace(p2pConfig.Network),
-		)
-		if err != nil {
-			logger.Error("could not find peers", zap.Error(err))
-			return
-		}
-
-		var inflight int32
-		wg := &sync.WaitGroup{}
-		defer wg.Wait()
-		for p := range peerChan {
-			p := p
-			logger := logger.With(zap.String("peer_id", p.ID.String()))
-			logger.Debug("received peer from discovery")
-
-			if atomic.LoadInt32(&inflight) >= int32(maxPeers) {
-				logger.Debug("inflight connections at capacity, waiting")
-				wg.Wait()
-			}
-			if atomic.LoadUint32(&success) >= uint32(maxPeers) {
-				logger.Debug("reached max findings")
-				return
-			}
-
-			atomic.AddInt32(&inflight, 1)
-			wg.Add(1)
-			go func() {
-				defer atomic.AddInt32(&inflight, -1)
-				defer wg.Done()
-
-				if p.ID == h.ID() ||
-					h.Network().Connectedness(p.ID) == network.Connected ||
-					h.Network().Connectedness(p.ID) == network.Limited {
-					logger.Debug("peer already connected")
-					atomic.AddUint32(&duplicate, 1)
-					return
-				}
-
-				h.Peerstore().AddAddrs(p.ID, p.Addrs, peerstore.AddressTTL)
-				conn, err := h.Network().DialPeer(ctx, p.ID)
-				if err != nil {
-					logger.Debug("error while connecting to blossomsub peer", zap.Error(err))
-					atomic.AddUint32(&failure, 1)
-					return
-				}
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(identify.Timeout / 2):
-					logger.Debug("identifying peer timed out")
-					atomic.AddUint32(&failure, 1)
-					_ = conn.Close()
-				case <-idService.IdentifyWait(conn):
-					logger.Debug("connected to peer")
-					atomic.AddUint32(&success, 1)
-				}
-			}()
-		}
-	}
-
-	if init {
-		go discover()
-	} else {
-		discover()
-	}
 }
 
 func mergeDefaults(p2pConfig *config.P2PConfig) blossomsub.BlossomSubParams {
