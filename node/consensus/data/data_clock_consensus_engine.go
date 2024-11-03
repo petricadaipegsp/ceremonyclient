@@ -7,9 +7,11 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"sync"
 	"time"
 
+	"github.com/libp2p/go-libp2p/p2p/discovery/backoff"
 	"github.com/multiformats/go-multiaddr"
 	mn "github.com/multiformats/go-multiaddr/net"
 	"github.com/pkg/errors"
@@ -337,6 +339,39 @@ func (e *DataClockConsensusEngine) Start() <-chan error {
 	}()
 
 	e.state = consensus.EngineStateCollecting
+
+	go func() {
+		const baseDuration = 2 * time.Minute
+		const maxBackoff = 3
+		var currentBackoff = 0
+		lastHead, err := e.dataTimeReel.Head()
+		if err != nil {
+			panic(err)
+		}
+		source := rand.New(rand.NewSource(rand.Int63()))
+		for e.state < consensus.EngineStateStopping {
+			// Use exponential backoff with jitter in order to avoid hammering the bootstrappers.
+			time.Sleep(
+				backoff.FullJitter(
+					baseDuration<<currentBackoff,
+					baseDuration,
+					baseDuration<<maxBackoff,
+					source,
+				),
+			)
+			currentHead, err := e.dataTimeReel.Head()
+			if err != nil {
+				panic(err)
+			}
+			if currentHead.FrameNumber == lastHead.FrameNumber {
+				currentBackoff = min(maxBackoff, currentBackoff+1)
+				_ = e.pubSub.DiscoverPeers()
+			} else {
+				currentBackoff = max(0, currentBackoff-1)
+				lastHead = currentHead
+			}
+		}
+	}()
 
 	go func() {
 		thresholdBeforeConfirming := 4

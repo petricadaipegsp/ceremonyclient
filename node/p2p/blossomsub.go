@@ -67,6 +67,7 @@ type BlossomSub struct {
 	peerScore   map[string]int64
 	peerScoreMx sync.Mutex
 	network     uint8
+	discovery   internal.PeerConnector
 }
 
 var _ PubSub = (*BlossomSub)(nil)
@@ -354,6 +355,7 @@ func NewBlossomSub(
 		panic(err)
 	}
 	discovery = internal.NewChainedPeerConnector(ctx, bootstrap, discovery)
+	bs.discovery = discovery
 
 	go monitorPeers(ctx, logger, h)
 
@@ -740,6 +742,10 @@ func (b *BlossomSub) Reconnect(peerId []byte) error {
 
 	b.h.ConnManager().Protect(info.ID, "bootstrap")
 	return nil
+}
+
+func (b *BlossomSub) DiscoverPeers() error {
+	return b.discovery.Connect(b.ctx)
 }
 
 func (b *BlossomSub) GetPeerScore(peerId []byte) int64 {
