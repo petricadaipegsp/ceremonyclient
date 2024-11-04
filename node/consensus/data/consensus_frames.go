@@ -229,7 +229,7 @@ func (e *DataClockConsensusEngine) GetAheadPeers(frameNumber uint64) []internal.
 	for _, v := range e.peerMap {
 		e.logger.Debug(
 			"checking peer info",
-			zap.Binary("peer_id", v.peerId),
+			zap.String("peer_id", peer.ID(v.peerId).String()),
 			zap.Uint64("max_frame_number", v.maxFrame),
 			zap.Int64("timestamp", v.timestamp),
 			zap.Binary("version", v.version),
