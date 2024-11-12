@@ -11,6 +11,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"source.quilibrium.com/quilibrium/monorepo/go-libp2p-blossomsub/pb"
 	"source.quilibrium.com/quilibrium/monorepo/node/config"
+	"source.quilibrium.com/quilibrium/monorepo/node/internal/autononce"
 	"source.quilibrium.com/quilibrium/monorepo/node/protobufs"
 )
 
@@ -141,6 +142,8 @@ func (e *DataClockConsensusEngine) publishMessage(
 	filter []byte,
 	message proto.Message,
 ) error {
+	message = autononce.Add(message)
+
 	any := &anypb.Any{}
 	if err := any.MarshalFrom(message); err != nil {
 		return errors.Wrap(err, "publish message")

@@ -9,6 +9,7 @@ import (
 
 	"source.quilibrium.com/quilibrium/monorepo/node/config"
 	"source.quilibrium.com/quilibrium/monorepo/node/execution/intrinsics/token/application"
+	"source.quilibrium.com/quilibrium/monorepo/node/internal/autononce"
 
 	"github.com/iden3/go-iden3-crypto/poseidon"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -218,6 +219,8 @@ func (r *RPCServer) SendMessage(
 	ctx context.Context,
 	req *protobufs.TokenRequest,
 ) (*protobufs.SendMessageResponse, error) {
+	req = autononce.AddTokenRequest(req)
+
 	any := &anypb.Any{}
 	if err := any.MarshalFrom(req); err != nil {
 		return nil, errors.Wrap(err, "publish message")

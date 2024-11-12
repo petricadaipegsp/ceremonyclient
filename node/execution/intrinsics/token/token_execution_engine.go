@@ -26,6 +26,7 @@ import (
 	qcrypto "source.quilibrium.com/quilibrium/monorepo/node/crypto"
 	"source.quilibrium.com/quilibrium/monorepo/node/execution"
 	"source.quilibrium.com/quilibrium/monorepo/node/execution/intrinsics/token/application"
+	"source.quilibrium.com/quilibrium/monorepo/node/internal/autononce"
 	"source.quilibrium.com/quilibrium/monorepo/node/internal/frametime"
 	"source.quilibrium.com/quilibrium/monorepo/node/keys"
 	"source.quilibrium.com/quilibrium/monorepo/node/p2p"
@@ -998,6 +999,8 @@ func (e *TokenExecutionEngine) publishMessage(
 	filter []byte,
 	message proto.Message,
 ) error {
+	message = autononce.Add(message)
+
 	any := &anypb.Any{}
 	if err := any.MarshalFrom(message); err != nil {
 		return errors.Wrap(err, "publish message")

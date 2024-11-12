@@ -245,6 +245,7 @@ message TokenRequest {
     AnnounceProverPause pause = 8;
     AnnounceProverResume resume = 9;
   }
+  bytes nonce = 99;
 }
 
 message TokenRequests {
