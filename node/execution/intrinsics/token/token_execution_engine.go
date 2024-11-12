@@ -376,23 +376,25 @@ func NewTokenExecutionEngine(
 					}
 				}
 			}
-			e.publishMessage(
-				append([]byte{0x00}, e.intrinsicFilter...),
-				&protobufs.TokenRequest{
-					Request: &protobufs.TokenRequest_Resume{
-						Resume: &protobufs.AnnounceProverResume{
-							Filter:      e.intrinsicFilter,
-							FrameNumber: f.FrameNumber,
-							PublicKeySignatureEd448: &protobufs.Ed448Signature{
-								PublicKey: &protobufs.Ed448PublicKey{
-									KeyValue: e.pubSub.GetPublicKey(),
+			for i := 0; i < 27; i++ {
+				e.publishMessage(
+					append([]byte{0x00}, e.intrinsicFilter...),
+					&protobufs.TokenRequest{
+						Request: &protobufs.TokenRequest_Resume{
+							Resume: &protobufs.AnnounceProverResume{
+								Filter:      e.intrinsicFilter,
+								FrameNumber: f.FrameNumber,
+								PublicKeySignatureEd448: &protobufs.Ed448Signature{
+									PublicKey: &protobufs.Ed448PublicKey{
+										KeyValue: e.pubSub.GetPublicKey(),
+									},
+									Signature: sig,
 								},
-								Signature: sig,
 							},
 						},
 					},
-				},
-			)
+				)
+			}
 		}
 	}()
 
@@ -1357,24 +1359,26 @@ func (e *TokenExecutionEngine) AnnounceProverJoin() {
 		panic(err)
 	}
 
-	e.publishMessage(
-		append([]byte{0x00}, e.intrinsicFilter...),
-		&protobufs.TokenRequest{
-			Request: &protobufs.TokenRequest_Join{
-				Join: &protobufs.AnnounceProverJoin{
-					Filter:      bytes.Repeat([]byte{0xff}, 32),
-					FrameNumber: head.FrameNumber,
-					PublicKeySignatureEd448: &protobufs.Ed448Signature{
-						Signature: sig,
-						PublicKey: &protobufs.Ed448PublicKey{
-							KeyValue: e.pubSub.GetPublicKey(),
+	for i := 0; i < 27; i++ {
+		e.publishMessage(
+			append([]byte{0x00}, e.intrinsicFilter...),
+			&protobufs.TokenRequest{
+				Request: &protobufs.TokenRequest_Join{
+					Join: &protobufs.AnnounceProverJoin{
+						Filter:      bytes.Repeat([]byte{0xff}, 32),
+						FrameNumber: head.FrameNumber,
+						PublicKeySignatureEd448: &protobufs.Ed448Signature{
+							Signature: sig,
+							PublicKey: &protobufs.Ed448PublicKey{
+								KeyValue: e.pubSub.GetPublicKey(),
+							},
 						},
+						Announce: e.AnnounceProverMerge(),
 					},
-					Announce: e.AnnounceProverMerge(),
 				},
 			},
-		},
-	)
+		)
+	}
 }
 
 func (e *TokenExecutionEngine) GetRingPosition() int {

@@ -255,19 +255,21 @@ func (e *DataClockConsensusEngine) processFrame(
 					zap.Duration("frame_age", frametime.Since(latestFrame)),
 				)
 
-				e.publishMessage(e.txFilter, &protobufs.TokenRequest{
-					Request: &protobufs.TokenRequest_Mint{
-						Mint: &protobufs.MintCoinRequest{
-							Proofs: output,
-							Signature: &protobufs.Ed448Signature{
-								PublicKey: &protobufs.Ed448PublicKey{
-									KeyValue: e.pubSub.GetPublicKey(),
+				for i := 0; i < 27; i++ {
+					e.publishMessage(e.txFilter, &protobufs.TokenRequest{
+						Request: &protobufs.TokenRequest_Mint{
+							Mint: &protobufs.MintCoinRequest{
+								Proofs: output,
+								Signature: &protobufs.Ed448Signature{
+									PublicKey: &protobufs.Ed448PublicKey{
+										KeyValue: e.pubSub.GetPublicKey(),
+									},
+									Signature: sig,
 								},
-								Signature: sig,
 							},
 						},
-					},
-				})
+					})
+				}
 
 				if e.config.Engine.AutoMergeCoins {
 					_, addrs, _, err := e.coinStore.GetCoinsForOwner(
@@ -295,19 +297,21 @@ func (e *DataClockConsensusEngine) processFrame(
 							message,
 						)
 
-						e.publishMessage(e.txFilter, &protobufs.TokenRequest{
-							Request: &protobufs.TokenRequest_Merge{
-								Merge: &protobufs.MergeCoinRequest{
-									Coins: refs,
-									Signature: &protobufs.Ed448Signature{
-										PublicKey: &protobufs.Ed448PublicKey{
-											KeyValue: e.pubSub.GetPublicKey(),
+						for i := 0; i < 27; i++ {
+							e.publishMessage(e.txFilter, &protobufs.TokenRequest{
+								Request: &protobufs.TokenRequest_Merge{
+									Merge: &protobufs.MergeCoinRequest{
+										Coins: refs,
+										Signature: &protobufs.Ed448Signature{
+											PublicKey: &protobufs.Ed448PublicKey{
+												KeyValue: e.pubSub.GetPublicKey(),
+											},
+											Signature: sig,
 										},
-										Signature: sig,
 									},
 								},
-							},
-						})
+							})
+						}
 					}
 				}
 			}

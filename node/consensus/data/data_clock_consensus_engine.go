@@ -607,20 +607,22 @@ func (e *DataClockConsensusEngine) Stop(force bool) <-chan error {
 		panic(err)
 	}
 
-	e.publishMessage(e.txFilter, &protobufs.TokenRequest{
-		Request: &protobufs.TokenRequest_Pause{
-			Pause: &protobufs.AnnounceProverPause{
-				Filter:      e.filter,
-				FrameNumber: e.GetFrame().FrameNumber,
-				PublicKeySignatureEd448: &protobufs.Ed448Signature{
-					PublicKey: &protobufs.Ed448PublicKey{
-						KeyValue: e.pubSub.GetPublicKey(),
+	for i := 0; i < 27; i++ {
+		e.publishMessage(e.txFilter, &protobufs.TokenRequest{
+			Request: &protobufs.TokenRequest_Pause{
+				Pause: &protobufs.AnnounceProverPause{
+					Filter:      e.filter,
+					FrameNumber: e.GetFrame().FrameNumber,
+					PublicKeySignatureEd448: &protobufs.Ed448Signature{
+						PublicKey: &protobufs.Ed448PublicKey{
+							KeyValue: e.pubSub.GetPublicKey(),
+						},
+						Signature: sig,
 					},
-					Signature: sig,
 				},
 			},
-		},
-	})
+		})
+	}
 
 	wg := sync.WaitGroup{}
 	wg.Add(len(e.executionEngines))
