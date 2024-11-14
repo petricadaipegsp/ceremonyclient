@@ -19,7 +19,7 @@ import (
 	"google.golang.org/grpc/status"
 	"source.quilibrium.com/quilibrium/monorepo/node/crypto"
 	"source.quilibrium.com/quilibrium/monorepo/node/execution/intrinsics/token/application"
-	grpc_internal "source.quilibrium.com/quilibrium/monorepo/node/internal/grpc"
+	qgrpc "source.quilibrium.com/quilibrium/monorepo/node/internal/grpc"
 	"source.quilibrium.com/quilibrium/monorepo/node/p2p"
 	"source.quilibrium.com/quilibrium/monorepo/node/protobufs"
 	"source.quilibrium.com/quilibrium/monorepo/node/store"
@@ -31,7 +31,7 @@ func (e *DataClockConsensusEngine) GetDataFrame(
 	ctx context.Context,
 	request *protobufs.GetDataFrameRequest,
 ) (*protobufs.DataFrameResponse, error) {
-	peerID, ok := grpc_internal.PeerIDFromContext(ctx)
+	peerID, ok := qgrpc.PeerIDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Internal, "remote peer ID not found")
 	}
@@ -610,7 +610,7 @@ func (e *DataClockConsensusEngine) GetPublicChannelForProvingKey(
 		)
 		after := time.After(20 * time.Second)
 		go func() {
-			server := grpc.NewServer(
+			server := qgrpc.NewServer(
 				grpc.MaxSendMsgSize(600*1024*1024),
 				grpc.MaxRecvMsgSize(600*1024*1024),
 			)
