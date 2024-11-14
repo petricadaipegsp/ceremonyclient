@@ -35,10 +35,13 @@ type P2PConfig struct {
 	ListenMultiaddr           string        `yaml:"listenMultiaddr"`
 	PeerPrivKey               string        `yaml:"peerPrivKey"`
 	TraceLogFile              string        `yaml:"traceLogFile"`
-	MinPeers                  int           `yaml:"minPeers"`
 	Network                   uint8         `yaml:"network"`
-	LowWatermarkConnections   uint          `yaml:"lowWatermarkConnections"`
-	HighWatermarkConnections  uint          `yaml:"highWatermarkConnections"`
+	LowWatermarkConnections   int           `yaml:"lowWatermarkConnections"`
+	HighWatermarkConnections  int           `yaml:"highWatermarkConnections"`
 	DirectPeers               []string      `yaml:"directPeers"`
 	GrpcServerRateLimit       int           `yaml:"grpcServerRateLimit"`
+	MinBootstrapPeers         int           `yaml:"minBootstrapPeers"`
+	BootstrapParallelism      int           `yaml:"bootstrapParallelism"`
+	DiscoveryParallelism      int           `yaml:"discoveryParallelism"`
+	DiscoveryPeerLookupLimit  int           `yaml:"discoveryPeerLookupLimit"`
 }
