@@ -45,6 +45,7 @@ import (
 	blossomsub "source.quilibrium.com/quilibrium/monorepo/go-libp2p-blossomsub"
 	"source.quilibrium.com/quilibrium/monorepo/go-libp2p-blossomsub/pb"
 	"source.quilibrium.com/quilibrium/monorepo/node/config"
+	qgrpc "source.quilibrium.com/quilibrium/monorepo/node/internal/grpc"
 	"source.quilibrium.com/quilibrium/monorepo/node/p2p/internal"
 	"source.quilibrium.com/quilibrium/monorepo/node/protobufs"
 )
@@ -906,7 +907,7 @@ func (b *BlossomSub) GetDirectChannel(key []byte, purpose string) (
 
 	// Open question: should we prefix this so a node can run both in mainnet and
 	// testnet? Feels like a bad idea and would be preferable to discourage.
-	dialCtx, err = grpc.DialContext(
+	dialCtx, err = qgrpc.DialContext(
 		b.ctx,
 		base58.Encode(key),
 		grpc.WithDialer(
