@@ -620,6 +620,7 @@ func (e *DataClockConsensusEngine) Stop(force bool) <-chan error {
 				},
 			},
 		},
+		Timestamp: time.Now().UnixMilli(),
 	})
 
 	wg := sync.WaitGroup{}

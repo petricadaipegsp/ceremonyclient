@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"net/http"
 	"strings"
+	"time"
 
 	"source.quilibrium.com/quilibrium/monorepo/node/config"
 	"source.quilibrium.com/quilibrium/monorepo/node/execution/intrinsics/token/application"
@@ -218,6 +219,8 @@ func (r *RPCServer) SendMessage(
 	ctx context.Context,
 	req *protobufs.TokenRequest,
 ) (*protobufs.SendMessageResponse, error) {
+	req.Timestamp = time.Now().UnixMilli()
+
 	any := &anypb.Any{}
 	if err := any.MarshalFrom(req); err != nil {
 		return nil, errors.Wrap(err, "publish message")
