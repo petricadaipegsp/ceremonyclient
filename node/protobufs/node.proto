@@ -246,6 +246,7 @@ message TokenRequest {
     AnnounceProverResume resume = 9;
   }
   bytes nonce = 99;
+  int64 timestamp = 10;
 }
 
 message TokenRequests {

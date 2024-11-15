@@ -543,6 +543,7 @@ func (e *DataClockConsensusEngine) handleMint(
 							},
 						},
 					},
+					Timestamp: time.Now().UnixMilli(),
 				},
 			)
 			if err != nil {

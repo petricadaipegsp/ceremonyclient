@@ -392,6 +392,7 @@ func NewTokenExecutionEngine(
 								},
 							},
 						},
+						Timestamp: gotime.Now().UnixMilli(),
 					},
 				)
 			}
@@ -1376,6 +1377,7 @@ func (e *TokenExecutionEngine) AnnounceProverJoin() {
 						Announce: e.AnnounceProverMerge(),
 					},
 				},
+				Timestamp: gotime.Now().UnixMilli(),
 			},
 		)
 	}

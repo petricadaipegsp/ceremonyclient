@@ -268,6 +268,7 @@ func (e *DataClockConsensusEngine) processFrame(
 								},
 							},
 						},
+						Timestamp: time.Now().UnixMilli(),
 					})
 				}
 
@@ -310,6 +311,7 @@ func (e *DataClockConsensusEngine) processFrame(
 										},
 									},
 								},
+								Timestamp: time.Now().UnixMilli(),
 							})
 						}
 					}
