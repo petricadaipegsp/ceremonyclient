@@ -439,6 +439,16 @@ func NewBlossomSub(
 		blossomsub.WithValidateThrottle(p2pConfig.ValidateThrottle),
 		blossomsub.WithValidateWorkers(p2pConfig.ValidateWorkers),
 	)
+	blossomOpts = append(blossomOpts, blossomsub.WithPeerFilter(internal.NewStaticPeerFilter(
+		// We filter out the bootstrap peers explicitly from BlossomSub
+		// as they do not subscribe to relevant topics anymore.
+		// However, the beacon is one of the bootstrap peers usually
+		// and as such it gets special treatment - it is the only bootstrap
+		// peer which is engaged in the network.
+		[]peer.ID{internal.BeaconPeerID(uint(p2pConfig.Network))},
+		internal.PeerAddrInfosToPeerIDSlice(bootstrappers),
+		true,
+	)))
 
 	params := toBlossomSubParams(p2pConfig)
 	rt := blossomsub.NewBlossomSubRouter(h, params, bs.network)
