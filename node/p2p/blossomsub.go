@@ -12,6 +12,7 @@ import (
 	"math/bits"
 	"net"
 	"net/http"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -430,7 +431,13 @@ func NewBlossomSub(
 			GraylistThreshold:           -10000,
 			AcceptPXThreshold:           1,
 			OpportunisticGraftThreshold: 2,
-		}))
+		},
+	))
+	blossomOpts = append(blossomOpts,
+		blossomsub.WithValidateQueueSize(p2pConfig.ValidateQueueSize),
+		blossomsub.WithValidateThrottle(p2pConfig.ValidateThrottle),
+		blossomsub.WithValidateWorkers(p2pConfig.ValidateWorkers),
+	)
 
 	params := toBlossomSubParams(p2pConfig)
 	rt := blossomsub.NewBlossomSubRouter(h, params, bs.network)
@@ -1094,6 +1101,15 @@ func withDefaults(p2pConfig *config.P2PConfig) *config.P2PConfig {
 	}
 	if p2pConfig.PingAttempts == 0 {
 		p2pConfig.PingAttempts = defaultPingAttempts
+	}
+	if p2pConfig.ValidateQueueSize == 0 {
+		p2pConfig.ValidateQueueSize = blossomsub.DefaultValidateQueueSize
+	}
+	if p2pConfig.ValidateThrottle == 0 {
+		p2pConfig.ValidateThrottle = blossomsub.DefaultValidateThrottle
+	}
+	if p2pConfig.ValidateWorkers == 0 {
+		p2pConfig.ValidateWorkers = runtime.NumCPU()
 	}
 	return p2pConfig
 }

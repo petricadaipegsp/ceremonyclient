@@ -47,4 +47,7 @@ type P2PConfig struct {
 	PingTimeout               time.Duration `yaml:"pingTimeout"`
 	PingPeriod                time.Duration `yaml:"pingPeriod"`
 	PingAttempts              int           `yaml:"pingAttempts"`
+	ValidateQueueSize         int           `yaml:"validateQueueSize"`
+	ValidateThrottle          int           `yaml:"validateThrottle"`
+	ValidateWorkers           int           `yaml:"validateWorkers"`
 }
